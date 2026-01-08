@@ -29,31 +29,17 @@ class SupabaseService {
   }
 
   // ============ СТАДИИ ПРОЕКТА ============
-
-  async getStagesByProjectId(projectId) {
-    try {
-      const { data, error } = await this.client
-        .from('stages')
-        .select('*')
-        .eq('stage_project_id', projectId);
-
-      if (error) throw error;
-      return data || [];
-    } catch (error) {
-      logger.error(`Error getting stages: ${error.message}`);
-      throw error;
-    }
-  }
+  // УДАЛЕНО: stages теперь хранятся как project.stage_type (поле в projects)
 
   // ============ OBJECTS ============
 
   async getObjectsByProjectId(projectId) {
     try {
-      // Objects связаны с проектом через stages
+      // Objects напрямую связаны с проектом через object_project_id
       const { data, error } = await this.client
         .from('objects')
-        .select('*, stages!inner(stage_project_id)')
-        .eq('stages.stage_project_id', projectId);
+        .select('*')
+        .eq('object_project_id', projectId);
 
       if (error) throw error;
       return data || [];
@@ -125,26 +111,23 @@ class SupabaseService {
       throw new Error(`Project not found: ${projectId}`);
     }
     logger.info(`Project loaded: ${project.project_name}`);
+    logger.info(`  Stage type: ${project.stage_type || 'none'}`);
 
-    // 2. Стадии проекта
-    const stages = await this.getStagesByProjectId(projectId);
-    logger.info(`Stages loaded: ${stages.length}`);
-
-    // 3. Объекты
+    // 2. Объекты
     const objects = await this.getObjectsByProjectId(projectId);
     logger.info(`Objects loaded: ${objects.length}`);
 
-    // 4. Разделы
+    // 3. Разделы
     const sections = await this.getSectionsByProjectId(projectId);
     logger.info(`Sections loaded: ${sections.length}`);
 
-    // 5. Декомпозиция для каждого раздела
+    // 4. Декомпозиция для каждого раздела
     for (const section of sections) {
       section.decomposition_stages = await this.getDecompositionStagesBySectionId(
         section.section_id
       );
 
-      // 6. Items для каждого этапа декомпозиции
+      // 5. Items для каждого этапа декомпозиции
       for (const stage of section.decomposition_stages) {
         stage.items = await this.getDecompositionItemsByStageId(
           stage.decomposition_stage_id
@@ -158,7 +141,7 @@ class SupabaseService {
     );
     logger.info(`Decomposition stages loaded: ${totalDecomp}`);
 
-    return { project, stages, objects, sections };
+    return { project, objects, sections };
   }
 
   // ============ ЗАПИСЬ EXTERNAL_ID ============

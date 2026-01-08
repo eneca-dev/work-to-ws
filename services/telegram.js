@@ -101,10 +101,12 @@ class TelegramService {
   async sendSyncStarted(projectId, projectName, stats = {}) {
     if (!config.telegram.enabled) return;
 
+    const stageInfo = stats.stageType ? ` (${stats.stageType})` : '';
+
     const message = `
 🚀 <b>Синхронизация проекта запущена</b>
 
-📋 <b>Проект:</b> ${projectName || 'Неизвестный'}
+📋 <b>Проект:</b> ${projectName || 'Неизвестный'}${stageInfo}
 🆔 <b>ID:</b> <code>${projectId}</code>
 ⏰ <b>Начало:</b> ${this._formatDate(new Date())}
 
@@ -127,12 +129,12 @@ class TelegramService {
 
     // РАЗДЕЛ 1: PROJECT INFORMATION
     lines.push('=== PROJECT INFORMATION ===');
-    lines.push('WS Project ID,Project Name,Status,Stage Tags,Sync Date');
+    lines.push('WS Project ID,Project Name,Status,Stage,Sync Date');
     lines.push([
       stats.wsProjectId || '',
       stats.projectName || '',
       stats.projectStatus || '',
-      (stats.stageTags || []).join('; ') || '',
+      stats.stageTag || '',
       this._formatDate(new Date())
     ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(','));
     lines.push('');

@@ -13,10 +13,11 @@ async function main() {
   console.log(`Project ID: ${projectId}\n`);
 
   const fullProject = await supabaseService.getProjectFull(projectId);
-  const { project, stages, objects, sections } = fullProject;
+  const { project, objects, sections } = fullProject;
 
   console.log('📁 PROJECT:');
   console.log(`   Name: ${project.project_name}`);
+  console.log(`   Stage: ${project.stage_type || 'none'}`);
   console.log(`   external_id: ${project.external_id || 'NULL ❌'}`);
   console.log(`   external_source: ${project.external_source || 'NULL'}`);
   console.log('');

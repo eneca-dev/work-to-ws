@@ -7,7 +7,7 @@ const { getEmailByUserId } = require('../mappers/user-mapper');
 const { compareProjectData } = require('../utils/data-comparator');
 const logger = require('../utils/logger');
 
-async function syncProject(project, stages, dryRun = false) {
+async function syncProject(project, dryRun = false) {
   const result = {
     action: null, // 'created', 'updated' or 'unchanged'
     wsProjectId: null,
@@ -20,7 +20,6 @@ async function syncProject(project, stages, dryRun = false) {
     wsWriter.setDryRun(dryRun);
 
     // Подготовка данных
-    const stageTags = stages.map(s => s.stage_name).join(',');
     const managerEmail = await getEmailByUserId(project.project_manager);
 
     const projectData = {
@@ -30,9 +29,9 @@ async function syncProject(project, stages, dryRun = false) {
       dateEnd: formatDateForWS(project.project_end_date),
     };
 
-    // Добавляем теги только если есть стадии
-    if (stageTags) {
-      projectData.tags = stageTags;
+    // Добавляем тег стадии если есть
+    if (project.stage_type) {
+      projectData.tags = `Стадия ${project.stage_type}`;
     }
 
     // Создание или обновление

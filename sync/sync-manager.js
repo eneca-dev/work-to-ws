@@ -46,7 +46,6 @@ async function syncProjectToWS(projectId, dryRun = false, sendNotifications = nu
   };
 
   let project = null;
-  let stages = null;
   let objects = null;
   let sections = null;
 
@@ -55,11 +54,11 @@ async function syncProjectToWS(projectId, dryRun = false, sendNotifications = nu
     logger.info('Step 1: Loading data from eneca.work');
     const projectData = await supabase.getProjectFull(projectId);
     project = projectData.project;
-    stages = projectData.stages;
     objects = projectData.objects;
     sections = projectData.sections;
 
     logger.info(`Loaded project: ${project.project_name}`);
+    logger.info(`  Stage: ${project.stage_type || 'none'}`);
     logger.info(`  Objects: ${objects.length}`);
     logger.info(`  Sections: ${sections.length}`);
 
@@ -72,6 +71,7 @@ async function syncProjectToWS(projectId, dryRun = false, sendNotifications = nu
     // Отправить уведомление о начале синхронизации
     if (sendNotifications) {
       await telegram.sendSyncStarted(projectId, project.project_name, {
+        stageType: project.stage_type,
         objectsCount: objects.length,
         sectionsCount: sections.length,
         stagesCount: totalDecomposition
@@ -80,7 +80,7 @@ async function syncProjectToWS(projectId, dryRun = false, sendNotifications = nu
 
     // ============ ШАГ 2: СИНХРОНИЗАЦИЯ ПРОЕКТА ============
     logger.info('Step 2: Syncing project');
-    stats.project = await syncProject(project, stages, dryRun);
+    stats.project = await syncProject(project, dryRun);
 
     if (stats.project.error) {
       throw new Error(`Project sync failed: ${stats.project.error}`);
@@ -101,7 +101,7 @@ async function syncProjectToWS(projectId, dryRun = false, sendNotifications = nu
       // Отправить отчёт даже если нет объектов
       if (sendNotifications) {
         const endTime = new Date();
-        const csvStats = collectSyncStats(project, stages, objects, sections, stats, wsProjectId);
+        const csvStats = collectSyncStats(project, objects, sections, stats, wsProjectId);
 
         const allChanges = {
           project: stats.project.changes,
@@ -169,7 +169,7 @@ async function syncProjectToWS(projectId, dryRun = false, sendNotifications = nu
     // Отправить CSV отчёт в Telegram
     if (sendNotifications) {
       const endTime = new Date();
-      const csvStats = collectSyncStats(project, stages, objects, sections, stats, wsProjectId);
+      const csvStats = collectSyncStats(project, objects, sections, stats, wsProjectId);
 
       // Собрать все изменения для детального отчета
       const allChanges = {
@@ -213,13 +213,13 @@ async function syncProjectToWS(projectId, dryRun = false, sendNotifications = nu
 /**
  * Собрать статистику для CSV отчёта
  */
-function collectSyncStats(project, stages, objects, sections, stats, wsProjectId) {
+function collectSyncStats(project, objects, sections, stats, wsProjectId) {
   const csvStats = {
     // Project information
     wsProjectId: wsProjectId,
     projectName: project?.project_name || 'Unknown',
     projectStatus: project?.status || 'active',
-    stageTags: stages ? stages.map(s => s.stage_name) : [],
+    stageTag: project?.stage_type || '',
 
     // Objects
     objects: objects ? objects.map(obj => ({
