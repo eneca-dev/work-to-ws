@@ -69,7 +69,7 @@ Project
 | projects | ✅ Есть | ✅ Есть | Готово |
 | objects | ✅ Есть | ✅ Есть | Готово |
 | sections | ✅ Есть | ✅ Есть | Готово |
-| decomposition_stages | ❌ Нет | ❌ Нет | Нужна миграция |
+| decomposition_stages | ✅ Есть | ✅ Есть | Готово (миграция 2024-12-24) |
 
 ### Миграция для decomposition_stages
 
@@ -121,6 +121,14 @@ work-to-ws/
 │   ├── object-sync.js              # Objects → Tasks
 │   ├── section-sync.js             # Sections → Subtasks
 │   └── decomposition-sync.js       # Этапы → Sub-subtasks + чеклист
+│
+├── compare/                        # ⭐ НОВАЯ ПАПКА: предпросмотр синхронизации
+│   ├── data-fetcher.js             # Получение данных из обоих источников
+│   ├── diff-calculator.js          # Логика сравнения полей
+│   └── table-renderer.js           # Красивый вывод таблицы
+│
+├── scripts/                        # ⭐ НОВАЯ ПАПКА: CLI-скрипты
+│   └── compare.js                  # Скрипт сравнения (dry run)
 │
 ├── mappers/
 │   ├── date-mapper.js              # ISO → DD.MM.YYYY
@@ -562,7 +570,191 @@ SYNC_MAX_RETRIES=3
 
 ---
 
-## 11. Порядок разработки
+## 11. Предпросмотр синхронизации (Dry Run)
+
+### Зачем нужно
+
+Перед запуском реальной синхронизации хочется увидеть:
+- Что будет создано
+- Что будет обновлено
+- Какие данные изменятся
+
+Это защищает от неожиданных изменений и позволяет проверить данные.
+
+### Как запустить
+
+```bash
+# Простой вызов из командной строки (без HTTP-сервера)
+node scripts/compare.js <project-id>
+
+# Пример:
+node scripts/compare.js 123e4567-e89b-12d3-a456-426614174000
+```
+
+### Что делает скрипт
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. ПОЛУЧЕНИЕ ДАННЫХ                                        │
+├─────────────────────────────────────────────────────────────┤
+│  • Загружает проект из eneca.work (Supabase)                │
+│  • Загружает objects, sections, decomposition_stages        │
+│  • Для каждой сущности с external_id → запрашивает WS       │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  2. СРАВНЕНИЕ                                               │
+├─────────────────────────────────────────────────────────────┤
+│  • Если external_id пустой → будет CREATE                   │
+│  • Если external_id есть → сравниваем поля                  │
+│    - title, dates, responsible                              │
+│    - Если отличаются → будет UPDATE                         │
+│    - Если одинаковые → NO CHANGE                            │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│  3. ВЫВОД ТАБЛИЦЫ                                           │
+├─────────────────────────────────────────────────────────────┤
+│  Красивая таблица в консоли с колонками:                    │
+│  • Тип (project/object/section/decomposition)               │
+│  • Название                                                  │
+│  • Действие (CREATE / UPDATE / NO CHANGE)                   │
+│  • Что изменится (список полей)                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Пример вывода
+
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    СРАВНЕНИЕ: Проект "Стадия А - ЖК Сонячний"                ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║ Тип        │ Название                     │ Действие  │ Изменения            ║
+╠════════════╪══════════════════════════════╪═══════════╪══════════════════════╣
+║ PROJECT    │ Стадия А - ЖК Сонячний       │ UPDATE    │ end_date             ║
+╠════════════╪══════════════════════════════╪═══════════╪══════════════════════╣
+║ OBJECT     │ 1. [Курирование]             │ NO CHANGE │ -                    ║
+║ OBJECT     │ 2. [Проектування]            │ UPDATE    │ responsible          ║
+║ OBJECT     │ 3. [Новий об'єкт]            │ CREATE    │ новый                ║
+╠════════════╪══════════════════════════════╪═══════════╪══════════════════════╣
+║ SECTION    │ 10. АК 64/24-С               │ NO CHANGE │ -                    ║
+║ SECTION    │ 11. ПБ 64/24-С               │ UPDATE    │ title, dates         ║
+║ SECTION    │ 12. Новий розділ             │ CREATE    │ новый                ║
+╠════════════╪══════════════════════════════╪═══════════╪══════════════════════╣
+║ DECOMP     │ Етап 10. АК підготовка       │ CREATE    │ новый + чеклист      ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+ИТОГО:
+  CREATE: 3 (1 object, 1 section, 1 decomposition)
+  UPDATE: 3 (1 project, 1 object, 1 section)
+  NO CHANGE: 2
+
+⚠️  ВНИМАНИЕ: Чеклист в decomposition_stages фиксируется при создании!
+    Изменения в decomposition_items НЕ будут синхронизированы.
+```
+
+### Детальный режим
+
+```bash
+# С флагом --verbose показывает конкретные изменения
+node scripts/compare.js <project-id> --verbose
+```
+
+```
+SECTION: 11. ПБ 64/24-С
+  Действие: UPDATE
+  Изменения:
+    title:      "ПБ 64/24-С" → "11. ПБ 64/24-С"
+    start_date: "2025-01-15" → "2025-01-20"
+    end_date:   "2025-03-01" → "2025-03-15"
+```
+
+### Структура скрипта
+
+```
+work-to-ws/
+│
+├── scripts/
+│   └── compare.js              # Основной скрипт сравнения
+│
+├── compare/
+│   ├── data-fetcher.js         # Получение данных из обоих источников
+│   ├── diff-calculator.js      # Логика сравнения полей
+│   └── table-renderer.js       # Красивый вывод таблицы
+```
+
+### compare.js - точка входа
+
+```javascript
+#!/usr/bin/env node
+
+require('dotenv').config();
+const { fetchAllData } = require('../compare/data-fetcher');
+const { calculateDiff } = require('../compare/diff-calculator');
+const { renderTable } = require('../compare/table-renderer');
+
+async function main() {
+  const projectId = process.argv[2];
+  const verbose = process.argv.includes('--verbose');
+
+  if (!projectId) {
+    console.error('Использование: node scripts/compare.js <project-id> [--verbose]');
+    process.exit(1);
+  }
+
+  console.log(`\n🔍 Загрузка данных для проекта ${projectId}...\n`);
+
+  // 1. Получаем данные из обоих источников
+  const { enecaData, wsData } = await fetchAllData(projectId);
+
+  // 2. Сравниваем
+  const diff = calculateDiff(enecaData, wsData);
+
+  // 3. Выводим таблицу
+  renderTable(diff, verbose);
+
+  // 4. Итоги
+  console.log('\n✅ Сравнение завершено.');
+  console.log('   Запустите синхронизацию когда будете готовы:\n');
+  console.log(`   curl -X POST http://localhost:3002/api/sync -H "Content-Type: application/json" -d '{"project_id":"${projectId}"}'`);
+}
+
+main().catch(err => {
+  console.error('❌ Ошибка:', err.message);
+  process.exit(1);
+});
+```
+
+### Что сравнивается
+
+| Сущность | Поля для сравнения |
+|----------|-------------------|
+| Project | name, manager, start_date, end_date, stage_tag |
+| Object | title, responsible, start_date, end_date |
+| Section | title, responsible, start_date, end_date |
+| Decomposition | title, responsibles, start_date, end_date, max_time |
+
+### Ограничения
+
+1. **Чеклист не сравнивается** - WS API не возвращает text задачи
+2. **Требует доступ к WS API** - нужны правильные credentials
+3. **Rate limit** - скрипт учитывает 1 req/sec при запросах к WS
+
+### Включено в MVP v1
+
+- [x] Базовое сравнение (CREATE/UPDATE/NO CHANGE)
+- [x] Таблица с итогами
+- [x] Режим --verbose для деталей
+
+### Отложено на v2
+
+- [ ] Экспорт в CSV/JSON
+- [ ] Сравнение нескольких проектов
+- [ ] Интерактивный режим (выбор что синхронизировать)
+
+---
+
+## 12. Порядок разработки
 
 ### Этап 1: Boilerplate
 1. Скопировать config/env.js из ws-to-work
@@ -580,26 +772,33 @@ SYNC_MAX_RETRIES=3
 2. rate-limiter.js
 3. Тестирование на тестовом проекте
 
-### Этап 4: Синхронизация
+### Этап 4: Скрипт сравнения (Compare) ⭐ НОВЫЙ
+1. scripts/compare.js - точка входа
+2. compare/data-fetcher.js - получение данных
+3. compare/diff-calculator.js - логика сравнения
+4. compare/table-renderer.js - вывод таблицы
+5. Тестирование на реальном проекте
+
+### Этап 5: Синхронизация
 1. sync-manager.js - оркестратор
 2. project-sync.js
 3. object-sync.js
 4. section-sync.js
 5. decomposition-sync.js
 
-### Этап 5: Mappers
+### Этап 6: Mappers
 1. date-mapper.js
 2. user-mapper.js
 3. checklist-mapper.js
 
-### Этап 6: API и тестирование
+### Этап 7: API и тестирование
 1. app.js с endpoints
 2. Тестирование на реальном проекте
 3. Проверка идемпотентности
 
 ---
 
-## 12. Вопросы для уточнения
+## 13. Вопросы для уточнения
 
 1. **Права в WS:** Есть ли у API-ключа права на создание проектов и задач?
 
@@ -613,7 +812,7 @@ SYNC_MAX_RETRIES=3
 
 ---
 
-## 13. Риски и митигация
+## 14. Риски и митигация
 
 | Риск | Вероятность | Митигация |
 |------|-------------|-----------|

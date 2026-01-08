@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>eneca.work to Worksection Sync</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border-left: 4px solid #e94560;
+        }
+        .header h1 { color: #e94560; margin-bottom: 5px; }
+        .header p { color: #888; }
+        .sync-controls {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #ccc;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            font-size: 14px;
+            background: #0f0f23;
+            color: #fff;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+        .input-group input::placeholder {
+            color: #666;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #0f0f23;
+            border-radius: 6px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+        .checkbox-group label {
+            color: #ccc;
+            cursor: pointer;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        .sync-button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+        .sync-button:hover { background: #ff6b6b; }
+        .sync-button:disabled { background: #444; cursor: not-allowed; }
+        .sync-button.secondary {
+            background: #333;
+        }
+        .sync-button.secondary:hover {
+            background: #444;
+        }
+        .status {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+        .status.success { background: #1e3a2f; color: #4ade80; border: 1px solid #22543d; }
+        .status.error { background: #3a1e1e; color: #f87171; border: 1px solid #7f1d1d; }
+        .status.info { background: #1e2a3a; color: #60a5fa; border: 1px solid #1e3a5f; }
+        .logs {
+            background: #0f0f23;
+            padding: 15px;
+            border-radius: 8px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            border: 1px solid #333;
+        }
+        .log-entry {
+            margin-bottom: 4px;
+            padding: 2px 0;
+            line-height: 1.4;
+        }
+        .log-entry.success { color: #4ade80; }
+        .log-entry.error { color: #f87171; }
+        .log-entry.warning { color: #fbbf24; }
+        .log-entry.info { color: #60a5fa; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-number { font-size: 28px; font-weight: bold; margin-bottom: 5px; }
+        .stat-label { font-size: 11px; color: #888; text-transform: uppercase; }
+        .created { color: #4ade80; }
+        .updated { color: #60a5fa; }
+        .skipped { color: #fbbf24; }
+        .errors { color: #f87171; }
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>eneca.work to Worksection</h1>
+            <p>Sync projects from Supabase to Worksection</p>
+        </div>
+
+        <div class="sync-controls">
+            <div class="input-group">
+                <label for="projectId">Project ID (UUID from eneca.work):</label>
+                <input type="text" id="projectId" placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000">
+                <p class="help-text">Enter the project_id from Supabase projects table</p>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="dryRun" checked>
+                <label for="dryRun">Dry Run (preview changes without writing to Worksection)</label>
+            </div>
+
+            <div class="button-group">
+                <button class="sync-button" onclick="startSync()">Start Sync</button>
+                <button class="sync-button secondary" onclick="clearLogs()">Clear Logs</button>
+            </div>
+        </div>
+
+        <div id="status"></div>
+
+        <div class="stats" id="stats" style="display: none;">
+            <div class="stat-card">
+                <div class="stat-number created" id="created">0</div>
+                <div class="stat-label">Created</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number updated" id="updated">0</div>
+                <div class="stat-label">Updated</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number skipped" id="skipped">0</div>
+                <div class="stat-label">Skipped</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number errors" id="errors">0</div>
+                <div class="stat-label">Errors</div>
+            </div>
+        </div>
+
+        <div class="logs" id="logs">
+            <div class="log-entry info">Ready to sync. Enter a project ID and click Start Sync.</div>
+        </div>
+    </div>
+
+    <script>
+        let isRunning = false;
+
+        function addLog(message, level = 'info') {
+            const logs = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${level}`;
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = `[${time}] ${message}`;
+            logs.appendChild(entry);
+            logs.scrollTop = logs.scrollHeight;
+        }
+
+        function clearLogs() {
+            const logs = document.getElementById('logs');
+            logs.innerHTML = '<div class="log-entry info">Logs cleared. Ready to sync.</div>';
+            document.getElementById('status').className = '';
+            document.getElementById('status').textContent = '';
+            document.getElementById('stats').style.display = 'none';
+        }
+
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.className = `status ${type}`;
+            status.textContent = message;
+        }
+
+        function updateStats(stats) {
+            if (!stats) return;
+
+            const statsDiv = document.getElementById('stats');
+            statsDiv.style.display = 'grid';
+
+            document.getElementById('created').textContent = stats.created || 0;
+            document.getElementById('updated').textContent = stats.updated || 0;
+            document.getElementById('skipped').textContent = stats.skipped || 0;
+            document.getElementById('errors').textContent = stats.errors || 0;
+        }
+
+        async function startSync() {
+            if (isRunning) return;
+
+            const projectId = document.getElementById('projectId').value.trim();
+            const dryRun = document.getElementById('dryRun').checked;
+
+            if (!projectId) {
+                updateStatus('Please enter a Project ID', 'error');
+                addLog('Error: Project ID is required', 'error');
+                return;
+            }
+
+            isRunning = true;
+            const button = document.querySelector('.sync-button');
+            button.disabled = true;
+            button.textContent = 'Syncing...';
+
+            document.getElementById('logs').innerHTML = '';
+
+            const mode = dryRun ? 'DRY-RUN' : 'REAL';
+            updateStatus(`Starting ${mode} sync for project: ${projectId}...`, 'info');
+            addLog(`Starting ${mode} synchronization...`);
+            addLog(`Project ID: ${projectId}`);
+
+            if (dryRun) {
+                addLog('Mode: DRY-RUN (no changes will be written)', 'warning');
+            } else {
+                addLog('Mode: REAL (changes will be written to Worksection)', 'warning');
+            }
+
+            try {
+                const response = await fetch('/api/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        project_id: projectId,
+                        dry_run: dryRun
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    updateStatus(`${mode} sync completed successfully!`, 'success');
+
+                    if (result.stats) {
+                        updateStats(result.stats);
+                    }
+
+                    if (result.actions && result.actions.length > 0) {
+                        addLog(`--- Actions (${result.actions.length}) ---`, 'info');
+                        result.actions.forEach(action => {
+                            const level = action.action === 'error' ? 'error' :
+                                         action.action === 'create' ? 'success' :
+                                         action.action === 'update' ? 'info' : 'warning';
+                            addLog(`${action.action.toUpperCase()}: ${action.type} - ${action.name}`, level);
+                        });
+                    }
+
+                    addLog(`Sync completed!`, 'success');
+
+                } else {
+                    updateStatus(`Sync failed: ${result.error}`, 'error');
+                    addLog(`Error: ${result.error}`, 'error');
+                }
+
+            } catch (error) {
+                updateStatus(`Sync failed: ${error.message}`, 'error');
+                addLog(`Network error: ${error.message}`, 'error');
+            } finally {
+                isRunning = false;
+                button.disabled = false;
+                button.textContent = 'Start Sync';
+            }
+        }
+
+        // Refresh logs periodically during sync
+        setInterval(async () => {
+            if (!isRunning) return;
+
+            try {
+                const response = await fetch('/api/logs');
+                const data = await response.json();
+
+                if (data.logs && data.logs.length > 0) {
+                    const logsDiv = document.getElementById('logs');
+                    const currentCount = logsDiv.children.length;
+
+                    data.logs.slice(currentCount - 1).forEach(log => {
+                        const level = log.level || 'info';
+                        const entry = document.createElement('div');
+                        entry.className = `log-entry ${level}`;
+                        entry.textContent = `[${new Date(log.timestamp).toLocaleTimeString()}] ${log.message}`;
+                        logsDiv.appendChild(entry);
+                    });
+
+                    logsDiv.scrollTop = logsDiv.scrollHeight;
+                }
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
