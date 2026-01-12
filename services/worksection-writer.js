@@ -257,6 +257,43 @@ class WorksectionWriter {
     return result.data;
   }
 
+  // ============ ТЕГИ ЗАДАЧ ============
+
+  /**
+   * Получить теги задач из группы
+   * @param {String} groupName - Название группы (например "Отдел")
+   * @returns {Array} Массив тегов [{id, title, group}, ...]
+   */
+  async getTaskTags(groupName) {
+    const params = {};
+    if (groupName) params.group = groupName;
+
+    const result = await this.request('get_task_tags', params);
+    return result.data || [];
+  }
+
+  /**
+   * Обновить теги задачи (добавить/удалить)
+   * @param {String} taskId - ID задачи
+   * @param {String} tagsToAdd - Теги для добавления (через запятую)
+   * @param {String} tagsToRemove - Теги для удаления (через запятую)
+   */
+  async updateTaskTags(taskId, tagsToAdd, tagsToRemove) {
+    if (this.dryRun) {
+      logger.info(`[DRY-RUN] Would UPDATE task tags ${taskId}: +${tagsToAdd || 'none'} -${tagsToRemove || 'none'}`);
+      return { status: 'ok' };
+    }
+
+    const params = { id_task: taskId };
+
+    if (tagsToAdd) params.plus = tagsToAdd;
+    if (tagsToRemove) params.minus = tagsToRemove;
+
+    const result = await this.request('update_task_tags', params);
+    logger.success(`Task tags updated: ${taskId} (+${tagsToAdd || 'none'} -${tagsToRemove || 'none'})`);
+    return result.data;
+  }
+
   // ============ ВСПОМОГАТЕЛЬНЫЕ ============
 
   async getUsers() {

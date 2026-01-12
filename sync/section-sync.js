@@ -4,7 +4,7 @@ const supabase = require('../services/supabase');
 const wsWriter = require('../services/worksection-writer');
 const { formatDateForWS } = require('../mappers/date-mapper');
 const { getEmailByUserId } = require('../mappers/user-mapper');
-const { getDepartmentNameByUserId } = require('../mappers/department-mapper');
+const { getDepartmentTagForUser, extractCurrentDepartmentTag } = require('../services/department-tags');
 const { compareTaskData } = require('../utils/data-comparator');
 const logger = require('../utils/logger');
 
@@ -58,6 +58,7 @@ async function syncSections(sections, wsProjectId, objectTaskMap, dryRun = false
       // Если parentTaskId === null - это нормально (для OS проектов)
 
       const responsibleEmail = await getEmailByUserId(section.section_responsible);
+      const departmentTag = await getDepartmentTagForUser(section.section_responsible);
 
       const taskData = {
         projectId: wsProjectId,     // WS проект
@@ -67,6 +68,12 @@ async function syncSections(sections, wsProjectId, objectTaskMap, dryRun = false
         dateStart: formatDateForWS(section.section_start_date),
         dateEnd: formatDateForWS(section.section_end_date),
       };
+
+      // Добавляем тег отдела только при CREATE (при UPDATE обновляем отдельно)
+      if (!section.external_id && departmentTag) {
+        taskData.tags = departmentTag;
+        logger.info(`Section "${section.section_name}" will have department tag: ${departmentTag}`);
+      }
 
       if (section.external_id) {
         // UPDATE - с проверкой изменений
@@ -96,6 +103,20 @@ async function syncSections(sections, wsProjectId, objectTaskMap, dryRun = false
           result.updated++;
           result.taskMap.set(section.section_id, section.external_id);
 
+          // 6. Обновить тег отдела если изменился
+          const currentDeptTag = extractCurrentDepartmentTag(wsTask.tags);
+          if (departmentTag !== currentDeptTag) {
+            if (departmentTag || currentDeptTag) {
+              await wsWriter.updateTaskTags(section.external_id, departmentTag, currentDeptTag);
+              logger.info(`Updated department tag: "${currentDeptTag || 'none'}" → "${departmentTag || 'none'}"`);
+              comparison.changes.push({
+                field: 'departmentTag',
+                from: currentDeptTag || 'none',
+                to: departmentTag || 'none'
+              });
+            }
+          }
+
           // Сохранить детали изменений для отчета
           result.changes.push({
             entity_type: 'Section',
@@ -109,6 +130,11 @@ async function syncSections(sections, wsProjectId, objectTaskMap, dryRun = false
           // Задача с таким ID не существует или в другом проекте
           logger.warning(`UPDATE failed for section ${section.section_name}: ${updateError.message}`);
           logger.warning(`Trying to CREATE new task and update external_id...`);
+
+          // Добавляем тег отдела для нового создания
+          if (departmentTag) {
+            taskData.tags = departmentTag;
+          }
 
           // Создаем новую задачу (с fallback без тега)
           let wsTask;

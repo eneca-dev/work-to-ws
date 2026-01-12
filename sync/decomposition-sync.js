@@ -4,6 +4,7 @@ const supabase = require('../services/supabase');
 const wsWriter = require('../services/worksection-writer');
 const { formatDateForWS } = require('../mappers/date-mapper');
 const { buildChecklist } = require('../mappers/checklist-mapper');
+const { getDepartmentTagForUser, extractCurrentDepartmentTag } = require('../services/department-tags');
 const { compareTaskData } = require('../utils/data-comparator');
 const logger = require('../utils/logger');
 
@@ -64,10 +65,12 @@ async function syncDecomposition(sections, wsProjectId, dryRun = false) {
         // Ответственный: берем первого из массива
         const responsibles = decomp.decomposition_stage_responsibles || [];
         let responsibleEmail = 'NOONE';
+        let departmentTag = null;
 
         if (responsibles.length > 0) {
           const { getEmailByUserId } = require('../mappers/user-mapper');
           responsibleEmail = await getEmailByUserId(responsibles[0]);
+          departmentTag = await getDepartmentTagForUser(responsibles[0]);
 
           if (responsibles.length > 1) {
             logger.warning(`Decomposition stage "${decomp.decomposition_stage_name}" has ${responsibles.length} responsibles, using first`);
@@ -86,6 +89,12 @@ async function syncDecomposition(sections, wsProjectId, dryRun = false) {
         // Добавляем maxTime ТОЛЬКО если есть реальное значение (избегаем null)
         if (plannedHours !== null && plannedHours > 0) {
           taskData.maxTime = plannedHours;
+        }
+
+        // Добавляем тег отдела только при CREATE (при UPDATE обновляем отдельно)
+        if (!decomp.external_id && departmentTag) {
+          taskData.tags = departmentTag;
+          logger.info(`Decomposition "${decomp.decomposition_stage_name}" will have department tag: ${departmentTag}`);
         }
 
         if (decomp.external_id) {
@@ -114,6 +123,20 @@ async function syncDecomposition(sections, wsProjectId, dryRun = false) {
             logger.info(`✓ Updated decomposition: ${decomp.decomposition_stage_name}`);
             result.updated++;
 
+            // 6. Обновить тег отдела если изменился
+            const currentDeptTag = extractCurrentDepartmentTag(wsTask.tags);
+            if (departmentTag !== currentDeptTag) {
+              if (departmentTag || currentDeptTag) {
+                await wsWriter.updateTaskTags(decomp.external_id, departmentTag, currentDeptTag);
+                logger.info(`Updated department tag: "${currentDeptTag || 'none'}" → "${departmentTag || 'none'}"`);
+                comparison.changes.push({
+                  field: 'departmentTag',
+                  from: currentDeptTag || 'none',
+                  to: departmentTag || 'none'
+                });
+              }
+            }
+
             // Сохранить детали изменений для отчета
             result.changes.push({
               entity_type: 'Decomposition',
@@ -127,6 +150,11 @@ async function syncDecomposition(sections, wsProjectId, dryRun = false) {
             // Задача не существует (возможно, старый external_id)
             logger.warning(`UPDATE failed for decomposition ${decomp.decomposition_stage_name}: ${updateError.message}`);
             logger.warning(`Creating new task and updating external_id...`);
+
+            // Добавляем тег отдела для нового создания
+            if (departmentTag) {
+              taskData.tags = departmentTag;
+            }
 
             // Создаем новую задачу с чеклистом
             const checklist = buildChecklist(decomp.items);

@@ -8,6 +8,7 @@ const { syncSections } = require('./section-sync');
 const { syncDecomposition } = require('./decomposition-sync');
 const { clearCache } = require('../mappers/user-mapper');
 const { clearCache: clearDepartmentCache } = require('../mappers/department-mapper');
+const departmentTags = require('../services/department-tags');
 const logger = require('../utils/logger');
 const telegram = require('../services/telegram');
 const { config } = require('../config/env');
@@ -24,6 +25,7 @@ async function syncProjectToWS(projectId, dryRun = false, sendNotifications = nu
   logger.clearLogs();
   clearCache(); // Очистка кэша пользователей
   clearDepartmentCache(); // Очистка кэша отделов
+  departmentTags.clearCache(); // Очистка кэша тегов отделов
 
   // Автоматическое определение отправки уведомлений
   if (sendNotifications === null) {
@@ -67,6 +69,9 @@ async function syncProjectToWS(projectId, dryRun = false, sendNotifications = nu
       totalDecomposition += s.decomposition_stages?.length || 0;
     });
     logger.info(`  Decomposition Stages: ${totalDecomposition}`);
+
+    // Загрузить допустимые теги отделов из WS (один раз для всей синхронизации)
+    await departmentTags.loadValidDepartmentTags();
 
     // Отправить уведомление о начале синхронизации
     if (sendNotifications) {
