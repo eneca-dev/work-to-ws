@@ -89,6 +89,7 @@ function compareProjectData(wsProject, enevaData) {
     { key: 'emailManager', type: 'email', wsKey: 'user_manager', transform: (val) => val?.email || null },
     { key: 'dateStart', type: 'date', wsKey: 'date_start' },
     { key: 'dateEnd', type: 'date', wsKey: 'date_end' },
+    { key: 'maxMoney', type: 'number', wsKey: 'max_money' },
     { key: 'tags', type: 'tags', wsKey: 'tags' },
   ];
 
@@ -142,6 +143,7 @@ function compareTaskData(wsTask, enevaData, options = {}) {
     { key: 'dateStart', type: 'date', wsKey: 'date_start' },
     { key: 'dateEnd', type: 'date', wsKey: 'date_end' },
     { key: 'maxTime', type: 'number', wsKey: 'max_time' },
+    { key: 'maxMoney', type: 'number', wsKey: 'max_money' },
     { key: 'tags', type: 'tags', wsKey: 'tags' },
   ];
 

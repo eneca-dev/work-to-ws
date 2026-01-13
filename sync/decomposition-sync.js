@@ -5,6 +5,7 @@ const wsWriter = require('../services/worksection-writer');
 const { formatDateForWS } = require('../mappers/date-mapper');
 const { buildChecklist } = require('../mappers/checklist-mapper');
 const { getDepartmentTagForUser, extractCurrentDepartmentTag } = require('../services/department-tags');
+const { getBudgetForEntity } = require('../services/budget-service');
 const { compareTaskData } = require('../utils/data-comparator');
 const logger = require('../utils/logger');
 
@@ -85,6 +86,13 @@ async function syncDecomposition(sections, wsProjectId, dryRun = false) {
           dateStart: formatDateForWS(decomp.decomposition_stage_start),
           dateEnd: formatDateForWS(decomp.decomposition_stage_finish),
         };
+
+        // Добавляем бюджет если есть
+        const budget = getBudgetForEntity('decomposition_stage', decomp.decomposition_stage_id);
+        if (budget) {
+          taskData.maxMoney = budget;
+          logger.info(`Decomposition "${decomp.decomposition_stage_name}" has budget: ${budget}`);
+        }
 
         // Добавляем maxTime ТОЛЬКО если есть реальное значение (избегаем null)
         if (plannedHours !== null && plannedHours > 0) {

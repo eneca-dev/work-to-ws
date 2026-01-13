@@ -93,6 +93,7 @@ class WorksectionWriter {
     if (data.dateEnd) params.dateend = data.dateEnd;
     if (data.tags) params.tags = data.tags;
     if (data.text) params.text = data.text;
+    if (data.maxMoney) params.max_money = data.maxMoney;
 
     const result = await this.request('post_project', params);
     logger.success(`Project created: ${result.data.id} - ${result.data.name}`);
@@ -113,6 +114,7 @@ class WorksectionWriter {
     if (data.emailManager) params.email_manager = data.emailManager;
     if (data.dateStart) params.datestart = data.dateStart;
     if (data.dateEnd) params.dateend = data.dateEnd;
+    if (data.maxMoney) params.max_money = data.maxMoney;
     // ВАЖНО: tags НЕ отправляем при UPDATE! Они могут вызвать ошибку "Tag is invalid"
     // если тег не существует. Теги устанавливаются только при CREATE.
 
@@ -168,6 +170,9 @@ class WorksectionWriter {
     // Плановые часы
     if (data.maxTime) params.max_time = data.maxTime;
 
+    // Бюджет
+    if (data.maxMoney) params.max_money = data.maxMoney;
+
     // Описание/чеклист (только при создании!)
     if (data.text) params.text = data.text;
 
@@ -205,6 +210,7 @@ class WorksectionWriter {
     if (data.dateStart) params.datestart = data.dateStart;
     if (data.dateEnd) params.dateend = data.dateEnd;
     if (data.maxTime) params.max_time = data.maxTime;
+    if (data.maxMoney) params.max_money = data.maxMoney;
     // ВАЖНО: tags НЕ отправляем при UPDATE! Они могут вызвать ошибку "Tag is invalid"
     // если тег не существует или не добавлен к проекту. Теги устанавливаются только при CREATE.
 

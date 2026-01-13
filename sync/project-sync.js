@@ -4,6 +4,7 @@ const supabase = require('../services/supabase');
 const wsWriter = require('../services/worksection-writer');
 const { formatDateForWS } = require('../mappers/date-mapper');
 const { getEmailByUserId } = require('../mappers/user-mapper');
+const { getBudgetForEntity } = require('../services/budget-service');
 const { compareProjectData } = require('../utils/data-comparator');
 const logger = require('../utils/logger');
 
@@ -32,6 +33,13 @@ async function syncProject(project, dryRun = false) {
     // Добавляем тег стадии если есть
     if (project.stage_type) {
       projectData.tags = `Стадия ${project.stage_type}`;
+    }
+
+    // Добавляем бюджет если есть
+    const budget = getBudgetForEntity('project', project.project_id);
+    if (budget) {
+      projectData.maxMoney = budget;
+      logger.info(`Project "${project.project_name}" has budget: ${budget}`);
     }
 
     // Создание или обновление

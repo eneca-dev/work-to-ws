@@ -5,6 +5,7 @@ const wsWriter = require('../services/worksection-writer');
 const { formatDateForWS } = require('../mappers/date-mapper');
 const { getEmailByUserId } = require('../mappers/user-mapper');
 const { getDepartmentTagForUser, extractCurrentDepartmentTag } = require('../services/department-tags');
+const { getBudgetForEntity } = require('../services/budget-service');
 const { compareTaskData } = require('../utils/data-comparator');
 const logger = require('../utils/logger');
 
@@ -68,6 +69,13 @@ async function syncSections(sections, wsProjectId, objectTaskMap, dryRun = false
         dateStart: formatDateForWS(section.section_start_date),
         dateEnd: formatDateForWS(section.section_end_date),
       };
+
+      // Добавляем бюджет если есть
+      const budget = getBudgetForEntity('section', section.section_id);
+      if (budget) {
+        taskData.maxMoney = budget;
+        logger.info(`Section "${section.section_name}" has budget: ${budget}`);
+      }
 
       // Добавляем тег отдела только при CREATE (при UPDATE обновляем отдельно)
       if (!section.external_id && departmentTag) {

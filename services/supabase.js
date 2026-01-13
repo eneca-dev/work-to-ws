@@ -248,6 +248,46 @@ class SupabaseService {
     const user = await this.getUserById(userId);
     return user?.email || null;
   }
+
+  // ============ БЮДЖЕТЫ ============
+
+  /**
+   * Загрузить все бюджеты для проекта и его сущностей
+   * @param {String} projectId - UUID проекта
+   * @param {Array} objectIds - массив UUID объектов
+   * @param {Array} sectionIds - массив UUID секций
+   * @param {Array} decompositionStageIds - массив UUID этапов декомпозиции
+   * @returns {Array} Массив бюджетов [{entity_type, entity_id, total_amount}, ...]
+   */
+  async getBudgetsForProject(projectId, objectIds = [], sectionIds = [], decompositionStageIds = []) {
+    try {
+      // Собираем все entity_id для запроса
+      const allEntityIds = [
+        projectId,
+        ...objectIds,
+        ...sectionIds,
+        ...decompositionStageIds
+      ].filter(Boolean);
+
+      if (allEntityIds.length === 0) {
+        return [];
+      }
+
+      const { data, error } = await this.client
+        .from('budgets')
+        .select('entity_type, entity_id, total_amount')
+        .in('entity_id', allEntityIds)
+        .eq('is_active', true);
+
+      if (error) throw error;
+
+      logger.info(`Budgets loaded: ${data?.length || 0}`);
+      return data || [];
+    } catch (error) {
+      logger.error(`Error getting budgets: ${error.message}`);
+      return [];
+    }
+  }
 }
 
 module.exports = new SupabaseService();

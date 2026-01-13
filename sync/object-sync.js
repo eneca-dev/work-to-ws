@@ -3,6 +3,7 @@
 const supabase = require('../services/supabase');
 const wsWriter = require('../services/worksection-writer');
 const { formatDateForWS } = require('../mappers/date-mapper');
+const { getBudgetForEntity } = require('../services/budget-service');
 const { compareTaskData } = require('../utils/data-comparator');
 const logger = require('../utils/logger');
 
@@ -47,6 +48,13 @@ async function syncObjects(objects, wsProjectId, dryRun = false) {
         dateStart: formatDateForWS(obj.object_start_date),
         dateEnd: formatDateForWS(obj.object_end_date),
       };
+
+      // Добавляем бюджет если есть
+      const budget = getBudgetForEntity('object', obj.object_id);
+      if (budget) {
+        taskData.maxMoney = budget;
+        logger.info(`Object "${obj.object_name}" has budget: ${budget}`);
+      }
 
       if (obj.external_id) {
         // UPDATE - с проверкой изменений
